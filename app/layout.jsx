@@ -1,8 +1,8 @@
 import "./globals.css";
 
 export const metadata = {
-  title: "ومض — النموذج الأولي",
-  description: "مراقبة إجرائية لحظية للمحاضر بإشارات لونية"
+  title: "كاتب الضبط",
+  description: "محضر الجلسة القضائية"
 };
 
 export default function RootLayout({ children }) {
