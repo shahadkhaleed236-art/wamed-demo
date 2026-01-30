@@ -1,78 +1,97 @@
 "use client";
-
-import { useMemo, useState } from "react";
+import { useState } from "react";
 
 export default function Page() {
   const [text, setText] = useState("");
+  const [result, setResult] = useState(null);
+  const [loading, setLoading] = useState(false);
 
-  // نفس فكرة “السلامة الإجرائية” في الصورة: تتغير حسب حالة بسيطة
-  const status = useMemo(() => {
-    const t = text.trim();
-    if (!t) return { label: "جاهزية مبدئية", dot: "#f59e0b" };
-    if (t.length < 40) return { label: "قيد المراجعة", dot: "#3b82f6" };
-    return { label: "سلامة إجرائية وجاهزية كاملة", dot: "#2e7d32" };
-  }, [text]);
+  async function analyze() {
+    if (!text.trim()) return;
+
+    setLoading(true);
+    setResult(null);
+
+    const r = await fetch("/api/analyze", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text })
+    });
+
+    const data = await r.json();
+    setResult(data);
+    setLoading(false);
+  }
+
+  const colors = {
+    RED: "#c62828",
+    YELLOW: "#f9a825",
+    GREEN: "#2e7d32",
+    BLACK: "#000000",
+    GRAY: "#757575"
+  };
 
   return (
-    <>
-      {/* Top Bar */}
-      <header className="topbar">
-        <div className="user">
-          <div className="userIcon">👤</div>
-          <span>محمد خالد</span>
-        </div>
+    <div style={{minHeight:"100vh",background:"#166534",padding:"40px",direction:"rtl"}}>
+      
+      <h1 style={{color:"white",fontSize:"28px",marginBottom:"20px"}}>
+        نموذج تحليل الإجراء — ومض
+      </h1>
 
-        <div className="topTitle">كاتب الضبط</div>
-      </header>
+      <textarea
+        value={text}
+        onChange={(e)=>setText(e.target.value)}
+        placeholder="الصقي نص المحضر هنا..."
+        style={{
+          width:"100%",
+          height:"220px",
+          borderRadius:"12px",
+          padding:"16px",
+          fontSize:"16px"
+        }}
+      />
 
-      {/* Main */}
-      <main className="wrapper">
-        <section className="card">
-          <div className="rowHead">
-            <h2 className="h2">محضر الجلسة القضائية</h2>
+      <button
+        onClick={analyze}
+        disabled={loading}
+        style={{
+          marginTop:"20px",
+          background:"#e5e7eb",
+          border:"none",
+          padding:"12px 26px",
+          borderRadius:"10px",
+          cursor:"pointer",
+          fontSize:"16px"
+        }}
+      >
+        {loading ? "جاري التحليل..." : "تحليل"}
+      </button>
 
-            <div className="statusPill" title="حالة السلامة الإجرائية">
-              <span
-                className="dot"
-                style={{
-                  background: status.dot,
-                  boxShadow:
-                    status.dot === "#2e7d32"
-                      ? "0 0 0 4px rgba(46,125,50,.15)"
-                      : status.dot === "#3b82f6"
-                      ? "0 0 0 4px rgba(59,130,246,.18)"
-                      : "0 0 0 4px rgba(245,158,11,.18)"
-                }}
-              />
-              {status.label}
-            </div>
+      {result && (
+        <div style={{
+          marginTop:"25px",
+          background:"white",
+          padding:"20px",
+          borderRadius:"12px"
+        }}>
+          <div style={{
+            fontSize:"20px",
+            fontWeight:"bold",
+            color: colors[result.level] || "#000"
+          }}>
+            المستوى: {result.level}
           </div>
 
-          <textarea
-            className="textarea"
-            placeholder="اكتبي محضر الجلسة هنا..."
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-          />
-        </section>
+          <div style={{marginTop:"10px"}}>
+            السبب: {result.reason}
+          </div>
 
-        <div className="actions">
-          <button
-            className="btn"
-            disabled={!text.trim()}
-            onClick={() => alert("تم اعتماد المحضر (تجربة واجهة فقط)")}
-          >
-            اعتماد المحضر
-          </button>
+          <div style={{marginTop:"10px"}}>
+            التلميح: {result.hint}
+          </div>
         </div>
-      </main>
+      )}
 
-      {/* Bottom Bar */}
-      <footer className="bottombar">
-        <div className="bottomItem">آخر تحديث: 10:57 ص</div>
-        <div className="bottomItem">السلامة الإجرائية: نجاح مراجعة</div>
-        <div className="bottomItem bottomMuted">حالة الجلسة: قيد التحرير</div>
-      </footer>
-    </>
+    </div>
   );
 }
