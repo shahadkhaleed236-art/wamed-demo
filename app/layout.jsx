@@ -1,8 +1,7 @@
 import "./globals.css";
 
 export const metadata = {
-  title: "كاتب الضبط",
-  description: "محضر الجلسة القضائية"
+  title: "Wamed Demo",
 };
 
 export default function RootLayout({ children }) {
