@@ -4,29 +4,147 @@ const client = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
 });
 
+
+// =========================
+// RULE ENGINE (قبل الذكاء الاصطناعي)
+// =========================
+
+function ruleEngine(text){
+
+const t = text;
+
+// ⚫ بطلان مطلق
+if(/انتحال|شخصية|حساب شخص آخر|عدم تبليغ|لا يوجد تبليغ|هوية غير مطابقة/.test(t)){
+return {
+level:"BLACK",
+reason:"بطلان محتمل يمس الهوية أو التبليغ",
+hint:"تحقق من صحة الهوية والتبليغ"
+};
+}
+
+// 🔴 مخالفة جسيمة / سقوط حق
+if(/بعد المهلة|انتهاء المهلة|إقفال باب المرافعة|تقديم متأخر|تصوير الجلسة/.test(t)){
+return {
+level:"RED",
+reason:"مخالفة جسيمة أو سقوط حق إجرائي",
+hint:"راجع المهلة والإذن النظامي"
+};
+}
+
+// 🔵 نقص في الأثر
+if(/غير واضح|صورة ضوئية|لا يمكن القراءة|خلل صوتي|انقطاع الصوت/.test(t)){
+return {
+level:"BLUE",
+reason:"نقص يؤثر على وضوح الأثر",
+hint:"أعد رفع المرفق أو تحقق من الصوت"
+};
+}
+
+// 🟣 مسؤولية تأديبية
+if(/ألفاظ غير لائقة|عبارات غير لائقة|إفشاء معلومات|اطلاع غير مصرح/.test(t)){
+return {
+level:"PURPLE",
+reason:"سلوك قد يوجب مسؤولية تأديبية",
+hint:"تم رصد السلوك"
+};
+}
+
+// 🟠 مخالفة شكلية
+if(/تأخر إرسال|خطأ بالاسم|اختلاف تهجئة|بيانات غير دقيقة/.test(t)){
+return {
+level:"ORANGE",
+reason:"مخالفة شكلية لا تبطل الإجراء",
+hint:"صحح البيانات الشكلية"
+};
+}
+
+return null;
+}
+
+
+
+// =========================
+// API HANDLER
+// =========================
+
 export async function POST(req){
-  const { text } = await req.json();
 
-  if(text.length < 20){
-    return Response.json({
-      level:"GRAY",
-      reason:"النص غير كافٍ",
-      hint:"أضيفي تفاصيل أكثر"
-    });
-  }
+try{
 
-  const r = await client.responses.create({
-    model:"gpt-5-mini",
-    input:`حلل إجرائيًا وأعد JSON فقط (level, reason, hint): ${text}`
-  });
+const { text } = await req.json();
 
-  try{
-    return Response.json(JSON.parse(r.output[0].content[0].text));
-  }catch{
-    return Response.json({
-      level:"GRAY",
-      reason:"تعذر التحليل",
-      hint:"أعيدي المحاولة"
-    });
-  }
+
+// ---- تحقق أساسي ----
+if(!text || text.length < 10){
+return Response.json({
+level:"GRAY",
+reason:"النص غير كافٍ للتحليل",
+hint:"أدخل وصفًا أطول"
+});
+}
+
+
+// ---- RULES FIRST ----
+const ruled = ruleEngine(text);
+
+if(ruled){
+return Response.json({
+...ruled,
+source: "rules"
+});
+}
+
+
+// ---- AI FALLBACK ----
+
+const prompt = `
+أنت مساعد إجرائي قانوني.
+حلل النص وأعد JSON فقط بهذا الشكل:
+
+{
+"level": "BLACK | RED | BLUE | PURPLE | ORANGE | GREEN | GRAY",
+"reason": "سبب مختصر",
+"hint": "توصية قصيرة"
+}
+
+النص:
+${text}
+`;
+
+const r = await client.responses.create({
+model: "gpt-5-mini",
+input: prompt
+});
+
+
+const raw = r.output[0].content[0].text;
+
+try{
+const parsed = JSON.parse(raw);
+
+return Response.json({
+...parsed,
+source: "ai"
+});
+
+}catch{
+return Response.json({
+level:"GRAY",
+reason:"تعذر تفسير نتيجة الذكاء الاصطناعي",
+hint:"يتطلب مراجعة بشرية",
+source:"ai-parse-fail"
+});
+}
+
+}catch(e){
+
+return Response.json({
+level:"GRAY",
+reason:"خطأ في الخادم",
+hint:"تحقق من إعدادات المفتاح",
+error:String(e)
+});
+
+}
+
 }
